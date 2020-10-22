@@ -128,6 +128,7 @@ x = tf.keras.layers.Dropout(0.2)(x)
 outputs = prediction_layer(x)
 model = tf.keras.Model(inputs, outputs)
 
+
 '''
 COMPILE THE MODEL
 '''
@@ -164,6 +165,7 @@ history = model.fit(
 '''
 PLOT ACCURACY FOR LOSS AND VALIDATION
 '''
+
 acc = history.history['accuracy']
 val_acc = history.history['val_accuracy']
 
@@ -187,4 +189,113 @@ plt.ylabel('Cross Entropy')
 plt.ylim([0,1.0])
 plt.title('Training and Validation Loss')
 plt.xlabel('epoch')
+
+'''
+    FINE TUNE THE MODEL
+    
+    We want to find out how many layers the models has, since we dont want to train the whole model, cause that can reverse
+    a lot of the good resuts in predicitons. Therefore we need to identify how many layes then train certain portion of them.
+    The later the layers are in the model, the more specific they are, visa versa the earlier layers are more genralized. Thus
+    the earlier layers are more generalized we can mold them more specificly towards our current dataset, dogs and cats. Therfore
+    we are targeting the earlier layers instead of the later ones.
+'''
+
+# how many layers are the in the basemodel
+print('Number of layers in the base model: ', len(base_model.layers))
+
+# The point we want to stop finetuning
+fine_tune_at = 100
+
+# enable the model to be trainable
+base_model.trainable = True
+
+# from layer 100 and onwards to layer 154 trainalbe = False
+for layer in base_model.layers[:fine_tune_at]:
+    layer.trainable = False
+
+
+model.compile(
+    loss = tf.keras.losses.BinaryCrossentropy(from_logits=True),
+    optimizer = tf.keras.optimizers.RMSprop(lr=base_learning_rate/10), # 0.00001
+    metrics=['accuracy']
+)
+
+model.summary()
+
+print(len(model.trainable_variables))
+
+
+''' 
+TRAIN THE FINE_TUNE MODEL
+'''
+fine_tune_epochs = 40
+total_epochs = initial_epochs + fine_tune_epochs
+
+history_fine = model.fit(
+    train_dataset,
+    epochs=total_epochs,
+    initial_epoch=history.epoch[-1],
+    validation_data=validation_dataset
+)
+
+
+'''
+    PLOT THE MODEL
+'''
+
+acc += history_fine.history['accuracy']
+val_acc += history_fine.history['val_accuracy']
+
+loss += history_fine.history['loss']
+val_loss += history_fine.history['val_loss']
+
+plt.figure(figsize=(8, 8))
+plt.subplot(2, 1, 1)
+plt.plot(acc, label='Training Accuracy')
+plt.plot(val_acc, label='Validation Accuracy')
+plt.ylim([0.8, 1])
+plt.plot([initial_epochs-1,initial_epochs-1],
+          plt.ylim(), label='Start Fine Tuning')
+plt.legend(loc='lower right')
+plt.title('Training and Validation Accuracy')
+
+plt.subplot(2, 1, 2)
+plt.plot(loss, label='Training Loss')
+plt.plot(val_loss, label='Validation Loss')
+plt.ylim([0, 1.0])
+plt.plot([initial_epochs-1,initial_epochs-1],
+         plt.ylim(), label='Start Fine Tuning')
+plt.legend(loc='upper right')
+plt.title('Training and Validation Loss')
+plt.xlabel('epoch')
 plt.show()
+
+
+'''
+EVALUATION AND PREDICTION
+'''
+loss, accuracy = model.evaluate(test_dataset)
+print('Test accuracy :', accuracy)
+
+# see if the model is accurate enough to predict if the image is of a cat or a dog.
+
+# Retrieve a batch of images from the test set.
+image_batch, label_batch = test_dataset.as_numpy_iterator().next()
+predictions = model.predict_on_batch(image_batch).flatten()
+
+# Apply a sigmoid since our model returns logits
+predictions = tf.nn.sigmoid(predictions)
+# set the values that are smaller then 0.5 to 0, and the greater is set to 1
+predictions = tf.where(predictions < 0.5, 0, 1)
+
+print('Predictions:\n', predictions.numpy())
+print('Labels:\n', label_batch)
+
+plt.figure(figsize=(10, 10))
+for i in range(9):
+  ax = plt.subplot(3, 3, i + 1)
+  plt.imshow(image_batch[i].astype("uint8"))
+  plt.title(class_names[predictions[i]])
+  plt.axis("off")
+plt.show()
+
