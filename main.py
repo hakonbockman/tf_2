@@ -228,7 +228,7 @@ print(len(model.trainable_variables))
 ''' 
 TRAIN THE FINE_TUNE MODEL
 '''
-fine_tune_epochs = 40
+fine_tune_epochs = 400
 total_epochs = initial_epochs + fine_tune_epochs
 
 history_fine = model.fit(
